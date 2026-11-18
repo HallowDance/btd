@@ -23,9 +23,9 @@ enum Command {
     Daemon,
     /// List known devices.
     List,
-    /// Connect a device by address or name.
+    /// Connect a device by number from `btd list`, name or address.
     Connect { device: String },
-    /// Disconnect a device by address or name; defaults to the only
+    /// Disconnect a device by number, name or address; defaults to the only
     /// connected device.
     Disconnect { device: Option<String> },
 }
@@ -40,7 +40,7 @@ async fn main() -> Result<()> {
         }
         Command::List => {
             let list = client().await?.list().await?.map_err(fail)?;
-            for d in list.devices {
+            for (n, d) in list.devices.iter().enumerate() {
                 let state = if d.connected {
                     "connected"
                 } else if d.paired {
@@ -49,7 +49,14 @@ async fn main() -> Result<()> {
                     "seen"
                 };
                 let kind = if d.audio { "audio" } else { "" };
-                println!("{}  {:<10} {:<5}  {}", d.address, state, kind, d.name);
+                println!(
+                    "{:>2}  {}  {:<10} {:<5}  {}",
+                    n + 1,
+                    d.address,
+                    state,
+                    kind,
+                    d.name
+                );
             }
             Ok(())
         }

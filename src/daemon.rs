@@ -146,6 +146,9 @@ impl Btd {
             Some(device) => bluez::find(&self.0.bus, &device).await?,
             None => bluez::only_connected(&self.0.bus).await?,
         };
+        if !d.connected {
+            return Err(anyhow::anyhow!("{} is not connected", d.name).into());
+        }
         self.0.held.lock().unwrap().insert(d.address.clone());
         info!("disconnecting {} on request", d.name);
         bluez::disconnect(&self.0.bus, &d.path).await?;

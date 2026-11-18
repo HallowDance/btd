@@ -66,15 +66,28 @@ pub async fn devices(conn: &Connection) -> Result<Vec<Device>> {
             path: path.to_string(),
         });
     }
-    out.sort_by(|a, b| b.connected.cmp(&a.connected).then(a.name.cmp(&b.name)));
+    // Stable order (by name, not state) so `btd list` numbers don't shift.
+    out.sort_by(|a, b| {
+        a.name
+            .to_lowercase()
+            .cmp(&b.name.to_lowercase())
+            .then(a.address.cmp(&b.address))
+    });
     Ok(out)
 }
 
-/// Find a device by exact address or case-insensitive name substring.
+/// Find a device by exact address, its number in `btd list` (from 1), or
+/// case-insensitive name substring.
 pub async fn find(conn: &Connection, query: &str) -> Result<Device> {
     let all = devices(conn).await?;
     if let Some(d) = all.iter().find(|d| d.address.eq_ignore_ascii_case(query)) {
         return Ok(d.clone());
+    }
+    if let Ok(n) = query.parse::<usize>() {
+        return match n.checked_sub(1).and_then(|i| all.get(i)) {
+            Some(d) => Ok(d.clone()),
+            None => bail!("no device number {n}; `btd list` shows 1 to {}", all.len()),
+        };
     }
     let q = query.to_lowercase();
     let hits: Vec<_> = all

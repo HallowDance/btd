@@ -75,3 +75,7 @@ varlinkctl introspect $XDG_RUNTIME_DIR/btd.sock com.theorycorner.Btd
 ## Credits
 
 Written by Ivo Iliev with Claude (Anthropic's Claude Opus 5.5) via Claude Code.
+
+## License
+
+GPL-3.0-or-later. See [LICENSE](LICENSE).

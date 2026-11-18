@@ -98,8 +98,11 @@ async fn reconnect_loop(shared: Arc<Shared>) {
                     && Instant::now() >= next_try
                 {
                     info!("reconnecting {} ({})", d.name, d.address);
-                    match tokio::time::timeout(CONNECT_TIMEOUT, bluez::connect(&shared.bus, &d.path))
-                        .await
+                    match tokio::time::timeout(
+                        CONNECT_TIMEOUT,
+                        bluez::connect(&shared.bus, &d.path),
+                    )
+                    .await
                     {
                         Ok(Ok(())) => info!("reconnected {}", d.name),
                         Ok(Err(e)) => info!("{} not reachable: {e:#}; retry in {delay:?}", d.name),
@@ -137,8 +140,12 @@ impl Btd {
         Ok(Done { name: d.name })
     }
 
-    async fn disconnect(&mut self, device: String) -> Result<Done, BtdError> {
-        let d = bluez::find(&self.0.bus, &device).await?;
+    /// Without a device, disconnects the only connected one.
+    async fn disconnect(&mut self, device: Option<String>) -> Result<Done, BtdError> {
+        let d = match device {
+            Some(device) => bluez::find(&self.0.bus, &device).await?,
+            None => bluez::only_connected(&self.0.bus).await?,
+        };
         self.0.held.lock().unwrap().insert(d.address.clone());
         info!("disconnecting {} on request", d.name);
         bluez::disconnect(&self.0.bus, &d.path).await?;

@@ -1,11 +1,7 @@
 //! PipeWire side: when a Bluetooth sink appears, make it the default and move
 //! every playing stream onto it ("newest wins").
 
-use std::{
-    cell::RefCell,
-    collections::HashMap,
-    rc::Rc,
-};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use pipewire as pw;
 use pw::{metadata::Metadata, types::ObjectType};
@@ -62,7 +58,9 @@ pub fn run() -> anyhow::Result<()> {
             let registry = registry.downgrade();
             move |obj| {
                 let Some(props) = obj.props else { return };
-                let Some(registry) = registry.upgrade() else { return };
+                let Some(registry) = registry.upgrade() else {
+                    return;
+                };
                 match obj.type_ {
                     ObjectType::Metadata if props.get("metadata.name") == Some("default") => {
                         match registry.bind::<Metadata, _>(obj) {
@@ -116,7 +114,12 @@ fn on_bluetooth_sink(state: &State, id: u32, name: &str, serial: &str) {
     );
     // Same keys pipewire-pulse writes for `pactl move-sink-input`.
     for (stream, _) in &state.streams {
-        md.set_property(*stream, "target.node", Some("Spa:Id"), Some(&id.to_string()));
+        md.set_property(
+            *stream,
+            "target.node",
+            Some("Spa:Id"),
+            Some(&id.to_string()),
+        );
         md.set_property(*stream, "target.object", Some("Spa:Id"), Some(serial));
     }
     info!("moved {} stream(s) to {name}", state.streams.len());

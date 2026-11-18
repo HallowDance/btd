@@ -55,6 +55,7 @@ systemctl --user enable --now btd.service
 ```sh
 btd list                 # known devices and their state
 btd connect rb-m600      # by name substring or address
+btd disconnect           # the only connected device; errors if none or several
 btd disconnect rb-m600   # also stops auto-reconnect until the next connect
 journalctl --user -u btd -f
 ```

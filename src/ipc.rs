@@ -40,5 +40,5 @@ impl From<anyhow::Error> for BtdError {
 pub trait BtdProxy {
     async fn list(&mut self) -> zlink::Result<Result<DeviceList, BtdError>>;
     async fn connect(&mut self, device: &str) -> zlink::Result<Result<Done, BtdError>>;
-    async fn disconnect(&mut self, device: &str) -> zlink::Result<Result<Done, BtdError>>;
+    async fn disconnect(&mut self, device: Option<&str>) -> zlink::Result<Result<Done, BtdError>>;
 }

@@ -25,8 +25,9 @@ enum Command {
     List,
     /// Connect a device by address or name.
     Connect { device: String },
-    /// Disconnect a device by address or name.
-    Disconnect { device: String },
+    /// Disconnect a device by address or name; defaults to the only
+    /// connected device.
+    Disconnect { device: Option<String> },
 }
 
 #[tokio::main]
@@ -40,7 +41,13 @@ async fn main() -> Result<()> {
         Command::List => {
             let list = client().await?.list().await?.map_err(fail)?;
             for d in list.devices {
-                let state = if d.connected { "connected" } else if d.paired { "paired" } else { "seen" };
+                let state = if d.connected {
+                    "connected"
+                } else if d.paired {
+                    "paired"
+                } else {
+                    "seen"
+                };
                 let kind = if d.audio { "audio" } else { "" };
                 println!("{}  {:<10} {:<5}  {}", d.address, state, kind, d.name);
             }
@@ -52,7 +59,11 @@ async fn main() -> Result<()> {
             Ok(())
         }
         Command::Disconnect { device } => {
-            let done = client().await?.disconnect(&device).await?.map_err(fail)?;
+            let done = client()
+                .await?
+                .disconnect(device.as_deref())
+                .await?
+                .map_err(fail)?;
             println!("disconnected {}", done.name);
             Ok(())
         }

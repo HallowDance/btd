@@ -86,7 +86,31 @@ pub async fn find(conn: &Connection, query: &str) -> Result<Device> {
         0 => bail!("no device matches '{query}'"),
         _ => bail!(
             "'{query}' matches several devices: {}",
-            hits.iter().map(|d| d.name.as_str()).collect::<Vec<_>>().join(", ")
+            hits.iter()
+                .map(|d| d.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    }
+}
+
+/// The single connected device; fails if none or several are connected.
+pub async fn only_connected(conn: &Connection) -> Result<Device> {
+    let mut connected: Vec<_> = devices(conn)
+        .await?
+        .into_iter()
+        .filter(|d| d.connected)
+        .collect();
+    match connected.len() {
+        1 => Ok(connected.remove(0)),
+        0 => bail!("no device is connected"),
+        _ => bail!(
+            "several devices are connected, name one: {}",
+            connected
+                .iter()
+                .map(|d| d.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
         ),
     }
 }

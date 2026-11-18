@@ -4,6 +4,8 @@ A small Bluetooth manager for Linux that replaces blueman and `bluetoothctl`.
 It talks to BlueZ (`bluetoothd`) over D-Bus and to PipeWire natively, and is
 built for an i3 desktop where audio devices matter most.
 
+![btd connecting a headset; audio follows it](docs/demo.gif)
+
 ## Goals
 
 - **Persistent connections**: reconnect trusted devices on startup, on resume

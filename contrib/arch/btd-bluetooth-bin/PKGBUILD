@@ -14,7 +14,7 @@ provides=('btd-bluetooth')
 conflicts=('btd' 'btd-bluetooth' 'btd-bluetooth-git')
 source=("$url/releases/download/v$pkgver/$_pkgname-$pkgver-x86_64.tar.gz")
 # Filled in from the release's .sha256 file for each new version.
-sha256sums=('SKIP')
+sha256sums=('3d5f4efc24a3b4ee473a0fd5dd37f0295214ad8ac8987b530fce03f426fe2bb6')
 
 package() {
   cd "$_pkgname-$pkgver-x86_64"

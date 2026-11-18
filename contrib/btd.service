@@ -1,0 +1,12 @@
+[Unit]
+Description=btd Bluetooth manager daemon
+After=pipewire.service wireplumber.service
+Wants=pipewire.service
+
+[Service]
+ExecStart=%h/.cargo/bin/btd daemon
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

@@ -41,11 +41,78 @@ Prototype. Working: the daemon, `list`, `connect`, `disconnect`, `scan`,
 `pair`, `remove`, the pairing agent, auto-reconnect of the last used audio
 device, audio switching, and the rofi menu.
 
-## Install
+## Install on Arch Linux
+
+btd is not on the AUR yet. The repository has two PKGBUILDs, so pacman
+still tracks and can cleanly remove everything it installs:
+
+- `contrib/arch/btd-bluetooth-bin`: the prebuilt x86_64 binary from the
+  latest GitHub release. No Rust toolchain needed.
+- `contrib/arch/btd-bluetooth-git`: builds the latest commit from source.
+
+Both install `/usr/bin/btd`, so they conflict with the unrelated AUR package
+`btd` (a btrfs disk usage tool).
+
+1. Start BlueZ:
+
+   ```sh
+   sudo pacman -S --needed bluez
+   sudo systemctl enable --now bluetooth.service
+   ```
+
+2. Remove other Bluetooth managers. btd registers itself as BlueZ's pairing
+   agent and handles reconnects and audio switching, so blueman or a desktop
+   environment's Bluetooth applet would fight it:
+
+   ```sh
+   sudo pacman -Rs blueman
+   ```
+
+   Also remove any `blueman-applet` line from your window manager's startup
+   config.
+
+3. Build and install the package, either the prebuilt binary:
+
+   ```sh
+   git clone https://github.com/HallowDance/btd.git
+   cd btd/contrib/arch/btd-bluetooth-bin
+   makepkg -si
+   ```
+
+   or from source (pulls in `cargo` and `clang` as build dependencies):
+
+   ```sh
+   cd btd/contrib/arch/btd-bluetooth-git
+   makepkg -si
+   ```
+
+4. Start the daemon for your user:
+
+   ```sh
+   systemctl --user enable --now btd.service
+   ```
+
+5. Check that it runs:
+
+   ```sh
+   btd list
+   journalctl --user -u btd -n 5
+   ```
+
+   The log should show `pairing agent registered` and `listening on ...`.
+
+To update, `git pull` and run `makepkg -si` again, then
+`systemctl --user restart btd`.
+
+### Without a package
+
+Needs Rust 1.88 or newer, `clang` and `pkgconf`:
 
 ```sh
 cargo install --path .
-cp contrib/btd.service ~/.config/systemd/user/
+mkdir -p ~/.config/systemd/user
+sed 's|/usr/bin/btd|%h/.cargo/bin/btd|' contrib/btd.service \
+    > ~/.config/systemd/user/btd.service
 systemctl --user daemon-reload
 systemctl --user enable --now btd.service
 ```

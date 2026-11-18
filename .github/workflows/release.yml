@@ -1,0 +1,49 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install build dependencies
+        run: pacman -Syu --noconfirm --needed rust clang pkgconf libpipewire git
+
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: cargo build --locked --release
+
+      - name: Package
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          [ "$GITHUB_REF_TYPE" = tag ] || version="0.0.0-${GITHUB_SHA::7}"
+          dir="btd-$version-x86_64"
+          mkdir "$dir"
+          cp target/release/btd contrib/btd.service README.md LICENSE "$dir/"
+          tar -czf "$dir.tar.gz" "$dir"
+          sha256sum "$dir.tar.gz" > "$dir.tar.gz.sha256"
+          echo "ASSET=$dir.tar.gz" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: btd-x86_64
+          path: btd-*.tar.gz*
+
+      - name: Attach to release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pacman -S --noconfirm --needed github-cli
+          git config --global --add safe.directory "$PWD"
+          gh release create "$GITHUB_REF_NAME" --prerelease --generate-notes \
+            "$ASSET" "$ASSET.sha256" \
+            || gh release upload "$GITHUB_REF_NAME" --clobber "$ASSET" "$ASSET.sha256"

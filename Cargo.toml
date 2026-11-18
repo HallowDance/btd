@@ -3,6 +3,8 @@ name = "btd"
 version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
+repository = "https://github.com/HallowDance/btd"
+rust-version = "1.88"
 
 [dependencies]
 anyhow = "1.0.104"
@@ -18,3 +20,8 @@ tracing-journald = "0.3.2"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 zbus = { version = "6.3.0", default-features = false, features = ["proxy", "service", "tokio"] }
 zlink = { version = "0.9.0", default-features = false, features = ["tokio", "service", "proxy", "tracing"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

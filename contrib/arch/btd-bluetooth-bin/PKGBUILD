@@ -1,0 +1,25 @@
+# Maintainer: Ivo Iliev <ivo@theorycorner.com>
+pkgname=btd-bluetooth-bin
+_pkgname=btd
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Small Bluetooth manager for BlueZ and PipeWire: auto-reconnect, audio follows the newest headset (prebuilt binary)'
+arch=('x86_64')
+url='https://github.com/HallowDance/btd'
+license=('GPL-3.0-or-later')
+depends=('glibc' 'libgcc' 'bluez' 'pipewire' 'wireplumber')
+optdepends=('rofi: btd menu'
+            'notification-daemon: progress notifications for btd --notify')
+provides=('btd-bluetooth')
+conflicts=('btd' 'btd-bluetooth' 'btd-bluetooth-git')
+source=("$url/releases/download/v$pkgver/$_pkgname-$pkgver-x86_64.tar.gz")
+# Filled in from the release's .sha256 file for each new version.
+sha256sums=('SKIP')
+
+package() {
+  cd "$_pkgname-$pkgver-x86_64"
+  install -Dm755 btd -t "$pkgdir/usr/bin"
+  install -Dm644 btd.service -t "$pkgdir/usr/lib/systemd/user"
+  install -Dm644 README.md -t "$pkgdir/usr/share/doc/$pkgname"
+  install -Dm644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgname"
+}

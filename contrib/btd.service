@@ -4,7 +4,7 @@ After=pipewire.service wireplumber.service
 Wants=pipewire.service
 
 [Service]
-ExecStart=%h/.cargo/bin/btd daemon
+ExecStart=/usr/bin/btd daemon
 Restart=on-failure
 RestartSec=3
 

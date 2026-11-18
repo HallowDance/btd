@@ -1,0 +1,53 @@
+# Maintainer: Ivo Iliev <ivo@theorycorner.com>
+pkgname=btd-bluetooth-git
+_pkgname=btd
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Small Bluetooth manager for BlueZ and PipeWire: auto-reconnect, audio follows the newest headset (built from git)'
+arch=('x86_64' 'aarch64')
+url='https://github.com/HallowDance/btd'
+license=('GPL-3.0-or-later')
+depends=('glibc' 'libgcc' 'bluez' 'pipewire' 'wireplumber')
+makedepends=('cargo' 'clang' 'git' 'pkgconf')
+optdepends=('rofi: btd menu'
+            'notification-daemon: progress notifications for btd --notify')
+provides=('btd-bluetooth')
+conflicts=('btd' 'btd-bluetooth' 'btd-bluetooth-bin')
+source=("$_pkgname::git+$url.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "$_pkgname"
+  if git describe --tags >/dev/null 2>&1; then
+    git describe --long --tags --abbrev=7 | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
+  else
+    printf 'r%s.g%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+  fi
+}
+
+prepare() {
+  cd "$_pkgname"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd "$_pkgname"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo build --frozen --release
+}
+
+check() {
+  cd "$_pkgname"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo test --frozen --release
+}
+
+package() {
+  cd "$_pkgname"
+  install -Dm755 target/release/btd -t "$pkgdir/usr/bin"
+  install -Dm644 contrib/btd.service -t "$pkgdir/usr/lib/systemd/user"
+  install -Dm644 README.md -t "$pkgdir/usr/share/doc/$pkgname"
+  install -Dm644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgname"
+}

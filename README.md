@@ -22,7 +22,7 @@ One binary, three roles:
   window opened by `btd pair` is active).
 - `btd <command>`: CLI with `list`, `scan`, `pair`, `connect`, `disconnect`
   and `remove`. Pairing also trusts the device.
-- `btd menu`: rofi script-mode picker, meant to be bound to an i3 key.
+- `btd menu`: rofi script-mode picker, meant to be bound to a key.
 
 ## Stack
 
@@ -39,7 +39,7 @@ One binary, three roles:
 
 Prototype. Working: the daemon, `list`, `connect`, `disconnect`, `scan`,
 `pair`, `remove`, the pairing agent, auto-reconnect of the last used audio
-device, and audio switching. Not built yet: the rofi menu.
+device, audio switching, and the rofi menu.
 
 ## Install
 
@@ -65,6 +65,25 @@ The daemon remembers the last connected audio device in
 `~/.local/state/btd/last-audio-device` and reconnects it when it drops, with
 backoff from 15 s up to 10 min. It only does this while no other audio device
 is connected.
+
+### rofi menu
+
+Bind it to a key, e.g. in sxhkd:
+
+```
+super + x
+        rofi -show btd -modi "btd:btd menu" -show-icons
+```
+
+Shows paired devices (● connected, ○ not); Enter toggles the connection.
+Also has "Pair new headset", "Scan and pair…" and "Remove…". Connecting and
+pairing run in the background and report through desktop notifications, so
+the menu closes right away.
+
+Any command takes `--notify` to report that way instead of printing, which
+suits key bindings, e.g. `btd --notify disconnect`.
+
+### Varlink API
 
 The Varlink API is on `$XDG_RUNTIME_DIR/btd.sock`:
 

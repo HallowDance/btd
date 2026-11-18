@@ -20,8 +20,8 @@ One binary, three roles:
 - `btd daemon`: systemd user service. Handles reconnects, audio switching and
   the BlueZ pairing agent (Just Works pairing is accepted only while a pairing
   window opened by `btd pair` is active).
-- `btd <command>`: CLI with `scan`, `pair`, `connect`, `disconnect`, `remove`,
-  `trust` and `list`.
+- `btd <command>`: CLI with `list`, `scan`, `pair`, `connect`, `disconnect`
+  and `remove`. Pairing also trusts the device.
 - `btd menu`: rofi script-mode picker, meant to be bound to an i3 key.
 
 ## Stack
@@ -37,9 +37,9 @@ One binary, three roles:
 
 ## Status
 
-Prototype. Working: the daemon, `list`, `connect`, `disconnect`, auto-reconnect
-of the last used audio device, and audio switching. Not built yet: `scan`,
-`pair`, `remove`, `trust`, the pairing agent and the rofi menu.
+Prototype. Working: the daemon, `list`, `connect`, `disconnect`, `scan`,
+`pair`, `remove`, the pairing agent, auto-reconnect of the last used audio
+device, and audio switching. Not built yet: the rofi menu.
 
 ## Install
 

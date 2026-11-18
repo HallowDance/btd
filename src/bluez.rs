@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
-use zbus::{Connection, OwnedObjectPath, OwnedVariant, fdo::ObjectManagerProxy, proxy};
+use zbus::{Connection, ObjectPath, OwnedObjectPath, OwnedVariant, fdo::ObjectManagerProxy, proxy};
 
 /// A2DP sink: the remote device can play our audio.
 const UUID_A2DP_SINK: &str = "0000110b-0000-1000-8000-00805f9b34fb";
@@ -13,17 +13,42 @@ const UUID_A2DP_SINK: &str = "0000110b-0000-1000-8000-00805f9b34fb";
 pub trait Device1 {
     fn connect(&self) -> zbus::Result<()>;
     fn disconnect(&self) -> zbus::Result<()>;
+    fn pair(&self) -> zbus::Result<()>;
+    #[zbus(property)]
+    fn set_trusted(&self, trusted: bool) -> zbus::Result<()>;
+}
+
+#[proxy(interface = "org.bluez.Adapter1", default_service = "org.bluez")]
+pub trait Adapter1 {
+    fn start_discovery(&self) -> zbus::Result<()>;
+    fn stop_discovery(&self) -> zbus::Result<()>;
+    fn remove_device(&self, device: &ObjectPath<'_>) -> zbus::Result<()>;
+}
+
+#[proxy(
+    interface = "org.bluez.AgentManager1",
+    default_service = "org.bluez",
+    default_path = "/org/bluez"
+)]
+pub trait AgentManager1 {
+    fn register_agent(&self, agent: &ObjectPath<'_>, capability: &str) -> zbus::Result<()>;
+    fn request_default_agent(&self, agent: &ObjectPath<'_>) -> zbus::Result<()>;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, zlink::introspect::Type)]
 pub struct Device {
+    /// Number shown by `btd list`; filled in by the daemon.
+    pub number: u32,
     pub address: String,
     pub name: String,
     pub paired: bool,
     pub trusted: bool,
     pub connected: bool,
     pub audio: bool,
-    #[serde(skip)]
+    /// BlueZ icon name, e.g. `audio-headset`, `audio-card`, `input-mouse`.
+    pub icon: String,
+    /// Signal strength; only present while a scan sees the device.
+    pub rssi: Option<i16>,
     pub path: String,
 }
 
@@ -31,20 +56,21 @@ fn prop<T: TryFrom<OwnedVariant>>(props: &HashMap<String, OwnedVariant>, key: &s
     props.get(key).and_then(|v| T::try_from(v.clone()).ok())
 }
 
-/// Every device BlueZ knows about.
-pub async fn devices(conn: &Connection) -> Result<Vec<Device>> {
+async fn managed_objects(conn: &Connection) -> Result<zbus::fdo::ManagedObjects> {
     let om = ObjectManagerProxy::builder(conn)
         .destination("org.bluez")
         .path("/")
         .build()
         .await?;
-    let objects = om
-        .get_managed_objects()
+    om.get_managed_objects()
         .await
-        .context("is bluetoothd running?")?;
+        .context("is bluetoothd running?")
+}
 
+/// Every device BlueZ knows about, unnumbered and in no particular order.
+pub async fn devices(conn: &Connection) -> Result<Vec<Device>> {
     let mut out = Vec::new();
-    for (path, ifaces) in objects {
+    for (path, ifaces) in managed_objects(conn).await? {
         let Some(props) = ifaces
             .iter()
             .find(|(name, _)| name.as_str() == "org.bluez.Device1")
@@ -54,7 +80,9 @@ pub async fn devices(conn: &Connection) -> Result<Vec<Device>> {
         };
         let address: String = prop(props, "Address").unwrap_or_default();
         let uuids: Vec<String> = prop(props, "UUIDs").unwrap_or_default();
+        let icon: String = prop(props, "Icon").unwrap_or_default();
         out.push(Device {
+            number: 0,
             name: prop(props, "Alias")
                 .or_else(|| prop(props, "Name"))
                 .unwrap_or_else(|| address.clone()),
@@ -62,40 +90,48 @@ pub async fn devices(conn: &Connection) -> Result<Vec<Device>> {
             paired: prop(props, "Paired").unwrap_or(false),
             trusted: prop(props, "Trusted").unwrap_or(false),
             connected: prop(props, "Connected").unwrap_or(false),
-            audio: uuids.iter().any(|u| u == UUID_A2DP_SINK),
+            audio: uuids.iter().any(|u| u == UUID_A2DP_SINK) || icon.starts_with("audio-"),
+            icon,
+            rssi: prop(props, "RSSI"),
             path: path.to_string(),
         });
     }
-    // Stable order (by name, not state) so `btd list` numbers don't shift.
-    out.sort_by(|a, b| {
-        a.name
-            .to_lowercase()
-            .cmp(&b.name.to_lowercase())
-            .then(a.address.cmp(&b.address))
-    });
     Ok(out)
 }
 
-/// Find a device by exact address, its number in `btd list` (from 1), or
-/// case-insensitive name substring.
-pub async fn find(conn: &Connection, query: &str) -> Result<Device> {
-    let all = devices(conn).await?;
-    if let Some(d) = all.iter().find(|d| d.address.eq_ignore_ascii_case(query)) {
+/// The first Bluetooth adapter.
+pub async fn adapter(conn: &Connection) -> Result<Adapter1Proxy<'_>> {
+    let path = managed_objects(conn)
+        .await?
+        .into_iter()
+        .find(|(_, ifaces)| ifaces.keys().any(|i| i.as_str() == "org.bluez.Adapter1"))
+        .map(|(path, _)| path)
+        .context("no Bluetooth adapter found")?;
+    Ok(Adapter1Proxy::builder(conn).path(path).build().await?)
+}
+
+/// Find a device by exact address, its number, or case-insensitive name
+/// substring. `devices` must already be numbered.
+pub fn find(devices: &[Device], query: &str) -> Result<Device> {
+    if let Some(d) = devices
+        .iter()
+        .find(|d| d.address.eq_ignore_ascii_case(query))
+    {
         return Ok(d.clone());
     }
-    if let Ok(n) = query.parse::<usize>() {
-        return match n.checked_sub(1).and_then(|i| all.get(i)) {
+    if let Ok(n) = query.parse::<u32>() {
+        return match devices.iter().find(|d| d.number == n) {
             Some(d) => Ok(d.clone()),
-            None => bail!("no device number {n}; `btd list` shows 1 to {}", all.len()),
+            None => bail!("no device number {n}; see `btd list`"),
         };
     }
     let q = query.to_lowercase();
-    let hits: Vec<_> = all
-        .into_iter()
+    let hits: Vec<_> = devices
+        .iter()
         .filter(|d| d.name.to_lowercase().contains(&q))
         .collect();
     match hits.len() {
-        1 => Ok(hits.into_iter().next().unwrap()),
+        1 => Ok(hits[0].clone()),
         0 => bail!("no device matches '{query}'"),
         _ => bail!(
             "'{query}' matches several devices: {}",
@@ -108,14 +144,10 @@ pub async fn find(conn: &Connection, query: &str) -> Result<Device> {
 }
 
 /// The single connected device; fails if none or several are connected.
-pub async fn only_connected(conn: &Connection) -> Result<Device> {
-    let mut connected: Vec<_> = devices(conn)
-        .await?
-        .into_iter()
-        .filter(|d| d.connected)
-        .collect();
+pub fn only_connected(devices: &[Device]) -> Result<Device> {
+    let connected: Vec<_> = devices.iter().filter(|d| d.connected).collect();
     match connected.len() {
-        1 => Ok(connected.remove(0)),
+        1 => Ok(connected[0].clone()),
         0 => bail!("no device is connected"),
         _ => bail!(
             "several devices are connected, name one: {}",
@@ -128,7 +160,7 @@ pub async fn only_connected(conn: &Connection) -> Result<Device> {
     }
 }
 
-async fn device_proxy<'a>(conn: &'a Connection, path: &str) -> Result<Device1Proxy<'a>> {
+pub async fn device_proxy<'a>(conn: &'a Connection, path: &str) -> Result<Device1Proxy<'a>> {
     let path = OwnedObjectPath::try_from(path.to_owned())?;
     Ok(Device1Proxy::builder(conn).path(path).build().await?)
 }

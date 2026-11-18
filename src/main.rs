@@ -1,3 +1,4 @@
+mod agent;
 mod audio;
 mod bluez;
 mod daemon;
@@ -5,10 +6,12 @@ mod ipc;
 
 use anyhow::{Context, Result, anyhow};
 use clap::{Parser, Subcommand};
+use futures_util::{Stream, StreamExt, pin_mut};
 use tracing_subscriber::{EnvFilter, prelude::*};
 use zlink::tokio::unix;
 
-use ipc::BtdProxy;
+use bluez::Device;
+use ipc::{BtdError, BtdProxy, Event};
 
 #[derive(Parser)]
 #[command(version, about = "Bluetooth manager for BlueZ + PipeWire")]
@@ -19,10 +22,21 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Run the background daemon (reconnects, audio switching).
+    /// Run the background daemon (reconnects, audio switching, pairing).
     Daemon,
-    /// List known devices.
+    /// List known devices: paired first, then ones seen by the last scan.
     List,
+    /// Look for nearby devices and show them as they are found.
+    Scan {
+        /// How long to scan.
+        #[arg(short, long, default_value_t = 15)]
+        seconds: u32,
+    },
+    /// Pair, trust and connect a device. Without one, pairs the single new
+    /// headset that is in pairing mode.
+    Pair { device: Option<String> },
+    /// Unpair a device and forget it.
+    Remove { device: String },
     /// Connect a device by number from `btd list`, name or address.
     Connect { device: String },
     /// Disconnect a device by number, name or address; defaults to the only
@@ -40,24 +54,21 @@ async fn main() -> Result<()> {
         }
         Command::List => {
             let list = client().await?.list().await?.map_err(fail)?;
-            for (n, d) in list.devices.iter().enumerate() {
-                let state = if d.connected {
-                    "connected"
-                } else if d.paired {
-                    "paired"
-                } else {
-                    "seen"
-                };
-                let kind = if d.audio { "audio" } else { "" };
-                println!(
-                    "{:>2}  {}  {:<10} {:<5}  {}",
-                    n + 1,
-                    d.address,
-                    state,
-                    kind,
-                    d.name
-                );
-            }
+            list.devices.iter().for_each(print_device);
+            Ok(())
+        }
+        Command::Scan { seconds } => {
+            println!("scanning for {seconds}s…");
+            let mut client = client().await?;
+            print_events(client.scan(seconds).await?).await
+        }
+        Command::Pair { device } => {
+            let mut client = client().await?;
+            print_events(client.pair(device.as_deref()).await?).await
+        }
+        Command::Remove { device } => {
+            let done = client().await?.remove(&device).await?.map_err(fail)?;
+            println!("removed {}", done.name);
             Ok(())
         }
         Command::Connect { device } => {
@@ -84,10 +95,42 @@ async fn client() -> Result<impl BtdProxy> {
         .with_context(|| format!("cannot reach btd daemon at {}", path.display()))
 }
 
-fn fail(e: ipc::BtdError) -> anyhow::Error {
+fn fail(e: BtdError) -> anyhow::Error {
     match e {
-        ipc::BtdError::Failed { message } => anyhow!(message),
+        BtdError::Failed { message } => anyhow!(message),
     }
+}
+
+fn print_device(d: &Device) {
+    let state = if d.connected {
+        "connected"
+    } else if d.paired {
+        "paired"
+    } else {
+        "seen"
+    };
+    let kind = if d.audio { "audio" } else { "" };
+    println!(
+        "{:>2}  {}  {:<10} {:<5}  {}",
+        d.number, d.address, state, kind, d.name
+    );
+}
+
+/// Print a streaming reply: devices as list lines, everything else as text.
+async fn print_events(
+    events: impl Stream<Item = zlink::Result<Result<Event, BtdError>>>,
+) -> Result<()> {
+    pin_mut!(events);
+    while let Some(event) = events.next().await {
+        let event = event?.map_err(fail)?;
+        if let Some(d) = &event.device {
+            print_device(d);
+        }
+        if let Some(message) = &event.message {
+            println!("{message}");
+        }
+    }
+    Ok(())
 }
 
 /// Log to the journal when run by systemd, to stderr otherwise.

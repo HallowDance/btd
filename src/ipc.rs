@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 
+use futures_util::Stream;
 use serde::{Deserialize, Serialize};
 use zlink::{ReplyError, introspect, proxy};
 
@@ -20,6 +21,14 @@ pub struct DeviceList {
 #[derive(Debug, Serialize, Deserialize, introspect::Type)]
 pub struct Done {
     pub name: String,
+}
+
+/// One step of a streaming call (`Scan`, `Pair`). A device that was found
+/// comes with `device`; progress and the final summary only have `message`.
+#[derive(Debug, Serialize, Deserialize, introspect::Type)]
+pub struct Event {
+    pub message: Option<String>,
+    pub device: Option<Device>,
 }
 
 #[derive(Debug, PartialEq, ReplyError, introspect::ReplyError)]
@@ -41,4 +50,15 @@ pub trait BtdProxy {
     async fn list(&mut self) -> zlink::Result<Result<DeviceList, BtdError>>;
     async fn connect(&mut self, device: &str) -> zlink::Result<Result<Done, BtdError>>;
     async fn disconnect(&mut self, device: Option<&str>) -> zlink::Result<Result<Done, BtdError>>;
+    async fn remove(&mut self, device: &str) -> zlink::Result<Result<Done, BtdError>>;
+    #[zlink(more)]
+    async fn scan(
+        &mut self,
+        seconds: u32,
+    ) -> zlink::Result<impl Stream<Item = zlink::Result<Result<Event, BtdError>>>>;
+    #[zlink(more)]
+    async fn pair(
+        &mut self,
+        device: Option<&str>,
+    ) -> zlink::Result<impl Stream<Item = zlink::Result<Result<Event, BtdError>>>>;
 }

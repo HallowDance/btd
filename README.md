@@ -144,6 +144,8 @@ super + x
         rofi -show btd -modi "btd:btd menu" -show-icons
 ```
 
+![btd rofi menu](docs/menu.png)
+
 Shows paired devices (● connected, ○ not); Enter toggles the connection.
 Also has "Pair new headset", "Scan and pair…" and "Remove…". Connecting and
 pairing run in the background and report through desktop notifications, so

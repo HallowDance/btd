@@ -1,7 +1,7 @@
 # Maintainer: Ivo Iliev <ivo@theorycorner.com>
 pkgname=btd-bluetooth-git
 _pkgname=btd
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
 pkgdesc='Small Bluetooth manager for BlueZ and PipeWire: auto-reconnect, audio follows the newest headset (built from git)'
 arch=('x86_64' 'aarch64')

@@ -41,6 +41,9 @@ pub struct Device {
     pub number: u32,
     pub address: String,
     pub name: String,
+    /// Whether the device broadcasts a name. Without one BlueZ only knows
+    /// its address; `name` is then "(no name)".
+    pub named: bool,
     pub paired: bool,
     pub trusted: bool,
     pub connected: bool,
@@ -81,11 +84,19 @@ pub async fn devices(conn: &Connection) -> Result<Vec<Device>> {
         let address: String = prop(props, "Address").unwrap_or_default();
         let uuids: Vec<String> = prop(props, "UUIDs").unwrap_or_default();
         let icon: String = prop(props, "Icon").unwrap_or_default();
+        // BlueZ fills Alias with the address when there is no Name.
+        let alias: Option<String> = prop(props, "Alias");
+        let named = prop::<String>(props, "Name").is_some()
+            || alias
+                .as_ref()
+                .is_some_and(|a| *a != address.replace(':', "-"));
         out.push(Device {
             number: 0,
-            name: prop(props, "Alias")
-                .or_else(|| prop(props, "Name"))
-                .unwrap_or_else(|| address.clone()),
+            name: match alias {
+                Some(a) if named => a,
+                _ => "(no name)".into(),
+            },
+            named,
             address,
             paired: prop(props, "Paired").unwrap_or(false),
             trusted: prop(props, "Trusted").unwrap_or(false),

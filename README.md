@@ -29,8 +29,9 @@ One binary, three roles:
 ## Stack
 
 - Rust, edition 2024
-- [zbus](https://crates.io/crates/zbus) for BlueZ and the daemon's own
-  session-bus service (`com.theorycorner.Btd`)
+- [zbus](https://crates.io/crates/zbus) for BlueZ and desktop notifications
+- [zlink](https://crates.io/crates/zlink) for the Varlink API between the CLI
+  and the daemon (`com.theorycorner.Btd`)
 - [pipewire](https://crates.io/crates/pipewire) for watching nodes and setting
   the default sink through WirePlumber metadata
 - tokio, clap, tracing (journald output)
@@ -127,8 +128,23 @@ btd connect 2            # by number from `btd list`
 btd connect rb-m600      # or by name substring or address
 btd disconnect           # the only connected device; errors if none or several
 btd disconnect rb-m600   # also stops auto-reconnect until the next connect
+btd scan                 # show nearby devices live for 15 s (-s to change)
+btd scan --all           # also devices that don't broadcast a name
+btd pair                 # pair, trust and connect the one headset in pairing mode
+btd pair 9               # or a device from `btd scan`
+btd remove 3             # unpair and forget
 journalctl --user -u btd -f
 ```
+
+Pairing is Just Works only (no PIN or passkey). The daemon is BlueZ's
+default pairing agent and accepts requests only while `btd pair` is running,
+so nothing can pair with this computer otherwise. `btd pair` without a device
+only picks headsets and headphones, so always-visible speakers and TV boxes
+nearby don't get in the way.
+
+Like Android, `btd scan` and `btd list` hide devices that don't broadcast a
+name (mostly phones, watches and trackers with rotating addresses). `--all`
+shows them as `(no name)`.
 
 The daemon remembers the last connected audio device in
 `~/.local/state/btd/last-audio-device` and reconnects it when it drops, with

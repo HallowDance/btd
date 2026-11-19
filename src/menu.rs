@@ -65,7 +65,7 @@ async fn main_menu(message: Option<&str>) -> Result<()> {
 
 async fn scan_menu() -> Result<()> {
     let mut client = client().await?;
-    let events = client.scan(SCAN_SECONDS).await?;
+    let events = client.scan(SCAN_SECONDS, false).await?;
     pin_mut!(events);
     let mut found: Vec<Device> = Vec::new();
     while let Some(event) = events.next().await {

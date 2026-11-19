@@ -32,12 +32,19 @@ enum Command {
     /// Run the background daemon (reconnects, audio switching, pairing).
     Daemon,
     /// List known devices: paired first, then ones seen by the last scan.
-    List,
+    List {
+        /// Also show devices that don't broadcast a name.
+        #[arg(short, long)]
+        all: bool,
+    },
     /// Look for nearby devices and show them as they are found.
     Scan {
         /// How long to scan.
         #[arg(short, long, default_value_t = 15)]
         seconds: u32,
+        /// Also show devices that don't broadcast a name.
+        #[arg(short, long)]
+        all: bool,
     },
     /// Pair, trust and connect a device. Without one, pairs the single new
     /// headset that is in pairing mode.
@@ -101,17 +108,17 @@ async fn run(command: Command, out: &mut Output) -> Result<()> {
             daemon::run().await
         }
         Command::Menu { .. } => menu::run().await,
-        Command::List => {
+        Command::List { all } => {
             let list = client().await?.list().await?.map_err(fail)?;
-            for d in &list.devices {
+            for d in list.devices.iter().filter(|d| all || d.named || d.paired) {
                 out.device(d).await;
             }
             Ok(())
         }
-        Command::Scan { seconds } => {
+        Command::Scan { seconds, all } => {
             out.say(&format!("scanning for {seconds}s…")).await?;
             let mut client = client().await?;
-            print_events(client.scan(seconds).await?, out).await
+            print_events(client.scan(seconds, all).await?, out).await
         }
         Command::Pair { device } => {
             let mut client = client().await?;

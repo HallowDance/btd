@@ -60,9 +60,15 @@ impl Shared {
     async fn devices(&self) -> Result<Vec<Device>> {
         let mut all = bluez::devices(&self.bus).await?;
         let seen = self.seen.lock().unwrap().clone();
-        let rank = |d: &Device| -> (bool, usize, String) {
+        // Unnamed devices go last so the named ones get the low numbers.
+        let rank = |d: &Device| -> (bool, bool, usize, String) {
             let pos = seen.iter().position(|a| a == &d.address);
-            (!d.paired, pos.unwrap_or(usize::MAX), d.name.to_lowercase())
+            (
+                !d.paired,
+                !d.named,
+                pos.unwrap_or(usize::MAX),
+                d.name.to_lowercase(),
+            )
         };
         all.sort_by_key(|d| rank(d));
         for (i, d) in all.iter_mut().enumerate() {
@@ -256,7 +262,7 @@ where
     ReceiverStream::new(rx)
 }
 
-async fn scan(shared: Arc<Shared>, progress: Progress, seconds: u32) -> Result<String> {
+async fn scan(shared: Arc<Shared>, progress: Progress, seconds: u32, all: bool) -> Result<String> {
     shared.seen.lock().unwrap().clear();
     shared.start_discovery().await?;
     let deadline = Instant::now() + Duration::from_secs(seconds.into());
@@ -265,7 +271,11 @@ async fn scan(shared: Arc<Shared>, progress: Progress, seconds: u32) -> Result<S
         while Instant::now() < deadline {
             shared.note_seen(&bluez::devices(&shared.bus).await?);
             for d in shared.devices().await? {
-                if d.rssi.is_some() && shown.insert(d.address.clone()) {
+                // Like Android: devices without a name are hidden unless asked for.
+                if d.rssi.is_some()
+                    && (all || d.named || d.paired)
+                    && shown.insert(d.address.clone())
+                {
                     progress.send(None, Some(d)).await;
                 }
             }
@@ -298,6 +308,7 @@ async fn find_new_headset(shared: &Shared, progress: &Progress) -> Result<Device
                 .into_iter()
                 .filter(|d| {
                     !d.paired
+                        && d.named
                         && d.rssi.is_some()
                         && matches!(d.icon.as_str(), "audio-headset" | "audio-headphones")
                 })
@@ -423,15 +434,17 @@ impl Btd {
     }
 
     /// Discover devices for `seconds`, streaming each one as it is found.
+    /// Devices without a name are left out unless `all` is set.
     #[zlink(more)]
     async fn scan(
         &mut self,
         more: bool,
         seconds: u32,
+        all: bool,
     ) -> impl Stream<Item = Result<Reply<Event>, BtdError>> {
         let _ = more;
         let shared = self.0.clone();
-        stream(move |p| scan(shared, p, seconds.clamp(1, 120)))
+        stream(move |p| scan(shared, p, seconds.clamp(1, 120), all))
     }
 
     /// Pair, trust and connect a device. Without one, waits for exactly one

@@ -55,6 +55,7 @@ pub trait BtdProxy {
     async fn scan(
         &mut self,
         seconds: u32,
+        all: bool,
     ) -> zlink::Result<impl Stream<Item = zlink::Result<Result<Event, BtdError>>>>;
     #[zlink(more)]
     async fn pair(

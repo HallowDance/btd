@@ -1,7 +1,7 @@
 # Maintainer: Ivo Iliev <ivo@theorycorner.com>
 pkgname=btd-bluetooth-bin
 _pkgname=btd
-pkgver=0.2.1
+pkgver=0.2.2
 pkgrel=1
 pkgdesc='Small Bluetooth manager for BlueZ and PipeWire: auto-reconnect, audio follows the newest headset (prebuilt binary)'
 arch=('x86_64')
@@ -14,7 +14,7 @@ provides=('btd-bluetooth')
 conflicts=('btd' 'btd-bluetooth' 'btd-bluetooth-git')
 source=("$url/releases/download/v$pkgver/$_pkgname-$pkgver-x86_64.tar.gz")
 # Filled in from the release's .sha256 file for each new version.
-sha256sums=('af3d938087e500769142ccdcd67825dc8d683cbd96eab6742b8cf3006838af4d')
+sha256sums=('cad829a81cf4425731772197b724e557b795c141015f74472560d49f637109e7')
 
 package() {
   cd "$_pkgname-$pkgver-x86_64"

@@ -1,11 +1,12 @@
 //! BlueZ pairing agent. Just Works only, and only while `btd pair` has a
 //! pairing window open.
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use anyhow::Result;
-use tracing::info;
-use zbus::{Connection, ObjectPath, OwnedObjectPath, interface};
+use futures_util::StreamExt;
+use tracing::{info, warn};
+use zbus::{Connection, ObjectPath, OwnedObjectPath, fdo::DBusProxy, interface};
 
 use crate::{bluez::AgentManager1Proxy, daemon::Shared};
 
@@ -80,9 +81,38 @@ impl Agent {
     fn cancel(&self) {}
 }
 
-/// Export the agent on `bus` and make it BlueZ's default agent.
-pub async fn register(bus: &Connection, shared: Arc<Shared>) -> Result<()> {
+/// Export the agent on `bus` and keep it registered as BlueZ's default
+/// agent: now if bluetoothd is running, and again every time it (re)starts,
+/// since a restart forgets all agents.
+pub async fn serve(bus: Connection, shared: Arc<Shared>) -> Result<()> {
     bus.object_server().at(PATH, Agent(shared)).await?;
+    // Subscribe before the first attempt so a restart in between isn't missed.
+    let dbus = DBusProxy::new(&bus).await?;
+    let mut owners = dbus
+        .receive_name_owner_changed_with_args(&[(0, "org.bluez")])
+        .await?;
+    if let Err(e) = register(&bus).await {
+        warn!("pairing agent not registered yet (is bluetoothd running?): {e:#}");
+    }
+    while let Some(signal) = owners.next().await {
+        if signal.args()?.new_owner().is_none() {
+            warn!("bluetoothd stopped");
+            continue;
+        }
+        info!("bluetoothd started; registering the pairing agent again");
+        // BlueZ may take a moment to export AgentManager1 after taking its name.
+        for delay in [0, 1, 3] {
+            tokio::time::sleep(Duration::from_secs(delay)).await;
+            match register(&bus).await {
+                Ok(()) => break,
+                Err(e) => warn!("cannot register pairing agent: {e:#}"),
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn register(bus: &Connection) -> Result<()> {
     let path = ObjectPath::try_from(PATH)?;
     let manager = AgentManager1Proxy::new(bus).await?;
     manager.register_agent(&path, "NoInputNoOutput").await?;

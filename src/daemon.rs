@@ -140,15 +140,24 @@ pub async fn run() -> Result<()> {
         pair_window: Mutex::default(),
     });
 
-    agent::register(&shared.bus, shared.clone())
-        .await
-        .context("cannot register pairing agent")?;
+    tokio::spawn({
+        let (bus, shared) = (shared.bus.clone(), shared.clone());
+        async move {
+            if let Err(e) = agent::serve(bus, shared).await {
+                warn!("pairing agent stopped: {e:#}");
+            }
+        }
+    });
 
+    // PipeWire restarts (e.g. on updates) end the connection; reconnect.
     std::thread::Builder::new()
         .name("pipewire".into())
         .spawn(|| {
-            if let Err(e) = audio::run() {
-                warn!("audio switching stopped: {e:#}");
+            loop {
+                if let Err(e) = audio::run() {
+                    warn!("lost PipeWire: {e:#}; reconnecting in 3 s");
+                }
+                std::thread::sleep(Duration::from_secs(3));
             }
         })?;
 

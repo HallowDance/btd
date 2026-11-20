@@ -71,8 +71,6 @@ Things btd doesn't do yet:
 
 - No config file; the defaults are fixed for now.
 - Only the first Bluetooth adapter is used.
-- If `bluetoothd` restarts, the pairing agent isn't registered again until btd
-  restarts.
 - No LE Audio (LC3, Auracast).
 - Only tested on Arch/Manjaro with PipeWire and WirePlumber.
 

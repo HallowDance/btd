@@ -24,6 +24,7 @@ pub fn run() -> anyhow::Result<()> {
     let main_loop = pw::main_loop::MainLoopRc::new(None)?;
     let context = pw::context::ContextRc::new(&main_loop, None)?;
     let core = context.connect_rc(None)?;
+    info!("connected to PipeWire");
     let registry = core.get_registry_rc()?;
     let state = Rc::new(RefCell::new(State::default()));
 

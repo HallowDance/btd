@@ -2,6 +2,8 @@
 Description=btd Bluetooth manager daemon
 After=pipewire.service wireplumber.service
 Wants=pipewire.service
+# Keep retrying; never give up on a slow boot.
+StartLimitIntervalSec=0
 
 [Service]
 ExecStart=/usr/bin/btd daemon

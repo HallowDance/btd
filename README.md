@@ -44,6 +44,38 @@ Prototype. Working: the daemon, `list`, `connect`, `disconnect`, `scan`,
 `pair`, `remove`, the pairing agent, auto-reconnect of the last used audio
 device, audio switching, and the rofi menu.
 
+## Anti-features and limitations
+
+### Anti-features
+
+Things btd deliberately doesn't do, and won't:
+
+- **No tray icon or GUI window.** The interface is the CLI and the rofi menu.
+- **No pairing outside `btd pair`.** Nothing can pair with the computer unless
+  you just asked for it.
+- **No PIN or passkey pairing.** Just Works only, so keyboards that insist on a
+  typed passkey can't be paired.
+- **No reconnecting every known device.** Only the last used audio device is
+  reconnected.
+- **No restoring the previous output.** The newest headset wins; when it
+  disconnects, PipeWire picks the fallback.
+- **No network access.** No cloud name lookups, telemetry or update checks.
+- **No legacy profiles.** No HSP, OBEX file transfer, Bluetooth networking (PAN)
+  or serial ports.
+- **No replacing `bluetoothd`.** BlueZ does the Bluetooth work; btd is policy on
+  top of it.
+
+### Limitations
+
+Things btd doesn't do yet:
+
+- No config file; the defaults are fixed for now.
+- Only the first Bluetooth adapter is used.
+- If `bluetoothd` restarts, the pairing agent isn't registered again until btd
+  restarts.
+- No LE Audio (LC3, Auracast).
+- Only tested on Arch/Manjaro with PipeWire and WirePlumber.
+
 ## Install on Arch Linux
 
 btd is not on the AUR yet. The repository has two PKGBUILDs, so pacman

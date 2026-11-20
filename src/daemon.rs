@@ -193,7 +193,7 @@ async fn reconnect_loop(shared: Arc<Shared>) {
         match bluez::devices(&shared.bus).await {
             Ok(devices) => {
                 let last = shared.last.lock().unwrap().clone();
-                if let Some(d) = devices.iter().find(|d| d.audio && d.connected) {
+                if let Some(d) = devices.iter().find(|d| d.audio && d.audio_connected) {
                     if last.as_deref() != Some(&d.address) {
                         info!("last audio device is now {} ({})", d.name, d.address);
                         shared.set_last(Some(&d.address));

@@ -1,13 +1,18 @@
 //! BlueZ access over the system D-Bus.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
-use zbus::{Connection, ObjectPath, OwnedObjectPath, OwnedVariant, fdo::ObjectManagerProxy, proxy};
+use zbus::{
+    Connection, ObjectPath, OwnedObjectPath, OwnedVariant, fdo::ObjectManagerProxy,
+    names::OwnedInterfaceName, proxy,
+};
 
 /// A2DP sink: the remote device can play our audio.
 const UUID_A2DP_SINK: &str = "0000110b-0000-1000-8000-00805f9b34fb";
+
+const MEDIA_TRANSPORT: &str = "org.bluez.MediaTransport1";
 
 #[proxy(interface = "org.bluez.Device1", default_service = "org.bluez")]
 pub trait Device1 {
@@ -47,12 +52,26 @@ pub struct Device {
     pub paired: bool,
     pub trusted: bool,
     pub connected: bool,
+    /// BlueZ has a media transport for the device. `connected` is also true
+    /// for a bare LE link, which a dual-mode headset opens while it refuses
+    /// audio.
+    #[serde(default)]
+    pub audio_connected: bool,
     pub audio: bool,
     /// BlueZ icon name, e.g. `audio-headset`, `audio-card`, `input-mouse`.
     pub icon: String,
     /// Signal strength; only present while a scan sees the device.
     pub rssi: Option<i16>,
     pub path: String,
+}
+
+type Interfaces = HashMap<OwnedInterfaceName, HashMap<String, OwnedVariant>>;
+
+fn interface<'a>(ifaces: &'a Interfaces, name: &str) -> Option<&'a HashMap<String, OwnedVariant>> {
+    ifaces
+        .iter()
+        .find(|(n, _)| n.as_str() == name)
+        .map(|(_, props)| props)
 }
 
 fn prop<T: TryFrom<OwnedVariant>>(props: &HashMap<String, OwnedVariant>, key: &str) -> Option<T> {
@@ -72,13 +91,15 @@ async fn managed_objects(conn: &Connection) -> Result<zbus::fdo::ManagedObjects>
 
 /// Every device BlueZ knows about, unnumbered and in no particular order.
 pub async fn devices(conn: &Connection) -> Result<Vec<Device>> {
+    let objects = managed_objects(conn).await?;
+    let with_transport: HashSet<OwnedObjectPath> = objects
+        .values()
+        .filter_map(|ifaces| interface(ifaces, MEDIA_TRANSPORT))
+        .filter_map(|props| prop(props, "Device"))
+        .collect();
     let mut out = Vec::new();
-    for (path, ifaces) in managed_objects(conn).await? {
-        let Some(props) = ifaces
-            .iter()
-            .find(|(name, _)| name.as_str() == "org.bluez.Device1")
-            .map(|(_, p)| p)
-        else {
+    for (path, ifaces) in objects {
+        let Some(props) = interface(&ifaces, "org.bluez.Device1") else {
             continue;
         };
         let address: String = prop(props, "Address").unwrap_or_default();
@@ -101,6 +122,7 @@ pub async fn devices(conn: &Connection) -> Result<Vec<Device>> {
             paired: prop(props, "Paired").unwrap_or(false),
             trusted: prop(props, "Trusted").unwrap_or(false),
             connected: prop(props, "Connected").unwrap_or(false),
+            audio_connected: with_transport.contains(&path),
             audio: uuids.iter().any(|u| u == UUID_A2DP_SINK) || icon.starts_with("audio-"),
             icon,
             rssi: prop(props, "RSSI"),
